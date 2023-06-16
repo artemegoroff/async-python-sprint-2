@@ -41,7 +41,7 @@ class Job:
         self.max_working_time = max_working_time
         self.tries = tries
         self.dependencies = dependencies or []
-        self.status = JobStatus.CREATED
+        self.is_completed = False
         self.started_at = None
         self.generator = None
 
@@ -51,16 +51,16 @@ class Job:
         return True
 
     def is_dependencies_completed(self):
-        return all(job.status == JobStatus.COMPLETED for job in self.dependencies)
+        return all(job.is_completed for job in self.dependencies)
 
     def is_finish_work_time(self):
+        if self.max_working_time <= 0:
+            return False
         working_time = (datetime.now() - self.started_at).total_seconds()
-        # отменяем задачу, если время превышено
         return working_time > self.max_working_time
 
     @coroutine
     def run(self):
-        self.status = JobStatus.RUNNING
         self.tries -= 1
         logger.info(f"Job {self.target.__name__} started")
         self.started_at = datetime.now()

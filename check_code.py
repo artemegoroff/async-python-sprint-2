@@ -1,5 +1,9 @@
-import multiprocessing
-from datetime import datetime
+import os
+import shutil
+import time
+import requests
+from datetime import datetime, timedelta
+from typing import Generator
 from job import Job
 from scheduler import Scheduler
 from logger import get_logger
@@ -9,40 +13,72 @@ logger = get_logger()
 
 def loop(a, b):
     for i in range(a, b):
-        print(2 ** 5)
+        yield 2 ** 5
+
+
+def create_dir() -> Generator:
+    logger.info("Start create_dir")
     yield
+    os.makedirs("tmp", exist_ok=True)
+    logger.info("Success create_dir")
 
 
-start_time = datetime.now()
-condition = multiprocessing.Condition()
+def create_file() -> Generator:
+    logger.info("Start create_file")
+    yield
+    logger.info("Get response in create_file")
+    response = requests.get("https://ya.ru")
+    yield
+    logger.info("create_file: Save to file")
+    with open('tmp/response.txt', 'w') as f:
+        f.write(response.text)
+    logger.info("Success create_file")
+
+
+def delete_dir() -> Generator:
+    logger.info("Start delete_dir")
+    yield
+    shutil.rmtree("tmp/", ignore_errors=True)
+    logger.info("Success delete_dir")
+
+
+def long_time_job() -> Generator:
+    logger.info("Start long_time_job")
+    time.sleep(3)
+    yield
+    logger.info("long_time_job continue")
+    yield
+    logger.info("Success long_time_job")
+
+
+def job_with_error():
+    logger.info("Start job_with_error")
+    raise ValueError
+
+
 J1 = Job(
-    # start_at=datetime(2022, 10, 19, 00, 39, 0),
-    max_working_time=0,
     tries=3,
     target=loop,
     dependencies=[],
     args=(10, 10000),
 )
-J2 = Job(
-    start_at=datetime(2023, 6, 16, 21, 13, 0),
-    max_working_time=0,
-    tries=3,
-    target=loop,
-    args=(10, 200000),
-)
-J3 = Job(
-    start_at=datetime(2023, 6, 16, 21, 13, 0),
-    max_working_time=4,
-    tries=3,
-    target=loop,
-    args=(10, 43432),
-)
 
 scheduler = Scheduler()
 scheduler.add_task(J1)
-scheduler.add_task(J2)
-scheduler.add_task(J3)
-try:
-    scheduler.run()
-except KeyboardInterrupt:
-    scheduler.stop()
+
+job1 = Job(
+    target=long_time_job, start_at=datetime.now() + timedelta(seconds=5),
+    max_working_time=2
+)
+job2 = Job(target=create_dir)
+job3 = Job(target=create_file, dependencies=[job2])
+job4 = Job(target=delete_dir, dependencies=[job2, job3])
+job5 = Job(target=job_with_error, tries=4)
+
+scheduler.add_task(job4)
+scheduler.add_task(job3)
+scheduler.add_task(job1)
+
+scheduler.add_task(job2)
+scheduler.add_task(job5)
+scheduler.run()

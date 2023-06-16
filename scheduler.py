@@ -1,7 +1,10 @@
 import os
+import pickle
 from collections import deque
 from job import Job
-import pickle
+from logger import get_logger
+
+logger = get_logger()
 
 
 class Scheduler:
@@ -11,10 +14,11 @@ class Scheduler:
         self.is_running: bool = True
         self.completed_job = []
         self.not_completed_job = []
-        self.queue = deque([self.add_job(job)
-                            for job in self.restore_tasks(Scheduler.STORAGE_FILE_STATUS)])
+        self.queue = deque()
+        [self.add_task(job)
+         for job in self.restore_tasks(Scheduler.STORAGE_FILE_STATUS)]
 
-    def add_task(self, job):
+    def add_task(self, job: Job):
         self.queue.append(job)
 
     @staticmethod
@@ -35,28 +39,41 @@ class Scheduler:
                 break
 
             if not job.is_dependencies_completed() or not job.is_start_time_past():
-                self.add_job(job)
+                self.add_task(job)
                 continue
 
             if not job.generator:
                 if not self.is_running:
-                    self.not_completed_jobs.append(job)
+                    self.not_completed_job.append(job)
                     continue
 
-                gen = job.run()
-                job.generator = gen
+                try:
+                    gen = job.run()
+                    job.generator = gen
+                except Exception as e:
+                    logger.exception(f"Job {job.target.__name__} is fail, attempts retries {job.tries}")
+                    if job.tries > 0:
+                        self.add_task(job)
+                    continue
 
             try:
                 if job.is_finish_work_time():
-                    raise TimeoutError(f"Job {id(self)} timed out.")
+                    raise TimeoutError(f"Job {job.target.__name__} timed out.")
                 next(gen)
-            except (TimeoutError, StopIteration):
+                self.add_task(job)
+            except TimeoutError:
                 self.completed_job.append(job.target.__name__)
+                job.is_completed = True
+                logger.info(f"Job {job.target.__name__} finish so long")
+            except StopIteration:
+                self.completed_job.append(job.target.__name__)
+                job.is_completed = True
+                logger.info(f"Job {job.target.__name__} finish work")
 
     def stop(self):
         self.is_running = False
         self.run()
-        self._save_tasks(Scheduler.STORAGE_FILE_STATUS, self.not_completed_jobs)
+        self._save_tasks(Scheduler.STORAGE_FILE_STATUS, self.not_completed_job)
 
     @staticmethod
     def _save_tasks(filename, jobs: list[Job]):

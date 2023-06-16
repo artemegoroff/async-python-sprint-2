@@ -11,12 +11,12 @@ from logger import get_logger
 logger = get_logger()
 
 
-def loop(a, b):
+def loop(a: int, b: int):
     for i in range(a, b):
         yield 2 ** 5
 
 
-def create_dir() -> Generator:
+def create_tmp_dir() -> Generator:
     logger.info("Start create_dir")
     yield
     os.makedirs("tmp", exist_ok=True)
@@ -35,7 +35,7 @@ def create_file() -> Generator:
     logger.info("Success create_file")
 
 
-def delete_dir() -> Generator:
+def delete_tmp_dir() -> Generator:
     logger.info("Start delete_dir")
     yield
     shutil.rmtree("tmp/", ignore_errors=True)
@@ -70,9 +70,9 @@ job1 = Job(
     target=long_time_job, start_at=datetime.now() + timedelta(seconds=5),
     max_working_time=2
 )
-job2 = Job(target=create_dir)
+job2 = Job(target=create_tmp_dir)
 job3 = Job(target=create_file, dependencies=[job2])
-job4 = Job(target=delete_dir, dependencies=[job2, job3])
+job4 = Job(target=delete_tmp_dir, dependencies=[job2, job3])
 job5 = Job(target=job_with_error, tries=4)
 
 scheduler.add_task(job4)

@@ -1,6 +1,6 @@
-from datetime import datetime, timedelta
-from typing import Optional, Callable, Generator
-
+from datetime import datetime
+from typing import Optional, Callable
+from functools import wraps
 from enum import Enum
 from logger import get_logger
 
@@ -9,6 +9,7 @@ logger = get_logger()
 
 def coroutine(func):
     # декоратор для инициализации генератора
+    @wraps(func)
     def inner(*args, **kwargs):
         g = func(*args, **kwargs)
         g.send(None)
@@ -30,9 +31,9 @@ class Job:
                  args: Optional[tuple] = None,
                  kwargs: Optional[dict] = None,
                  start_at: Optional[datetime] = None,
-                 max_working_time=-1,
-                 tries=0,
-                 dependencies=None,
+                 max_working_time: int = -1,
+                 tries: int = 0,
+                 dependencies: Optional[list] = None,
                  ):
         self.target = target
         self.__args = args or ()

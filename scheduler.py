@@ -29,38 +29,32 @@ class Scheduler:
         except FileNotFoundError:
             return []
 
+    def handle_job(self, job: Job):
+        if not job.is_dependencies_completed() or not job.is_start_time_past():
+            self.add_task(job)
+            return
+
+        if not job.generator:
+            if not self.is_running:
+                self.not_completed_job.append(job)
+                return
+
+            gen = job.run()
+            job.generator = gen
+
+        if job.is_finish_work_time():
+            raise TimeoutError(f"Job {job.target.__name__} timed out.")
+        next(job.generator)
+        self.add_task(job)
+
     def run(self):
-        job: Job
         while True:
             try:
-                job = self.queue.popleft()
+                job: Job = self.queue.popleft()
+                self.handle_job(job)
             except IndexError:
                 os.remove(Scheduler.STORAGE_FILE_STATUS) if os.path.exists(Scheduler.STORAGE_FILE_STATUS) else None
                 break
-
-            if not job.is_dependencies_completed() or not job.is_start_time_past():
-                self.add_task(job)
-                continue
-
-            if not job.generator:
-                if not self.is_running:
-                    self.not_completed_job.append(job)
-                    continue
-
-                try:
-                    gen = job.run()
-                    job.generator = gen
-                except Exception as e:
-                    logger.exception(f"Job {job.target.__name__} is fail, attempts retries {job.tries}")
-                    if job.tries > 0:
-                        self.add_task(job)
-                    continue
-
-            try:
-                if job.is_finish_work_time():
-                    raise TimeoutError(f"Job {job.target.__name__} timed out.")
-                next(gen)
-                self.add_task(job)
             except TimeoutError:
                 self.completed_job.append(job.target.__name__)
                 job.is_completed = True
@@ -69,6 +63,11 @@ class Scheduler:
                 self.completed_job.append(job.target.__name__)
                 job.is_completed = True
                 logger.info(f"Job {job.target.__name__} finish work")
+            except Exception:
+                logger.exception(f"Job {job.target.__name__} is fail, attempts retries {job.tries}")
+                if job.tries > 0:
+                    self.add_task(job)
+                continue
 
     def stop(self):
         self.is_running = False

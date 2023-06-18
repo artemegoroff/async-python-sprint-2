@@ -56,29 +56,32 @@ def job_with_error():
     raise ValueError
 
 
-J1 = Job(
-    tries=3,
-    target=loop,
-    dependencies=[],
-    args=(10, 10000),
-)
+def start_scheduler():
+    scheduler = Scheduler()
 
-scheduler = Scheduler()
-scheduler.add_task(J1)
+    job1 = Job(
+        tries=3,
+        target=loop,
+        dependencies=[],
+        args=(10, 10000),
+    )
+    job2 = Job(
+        target=long_time_job, start_at=datetime.now() + timedelta(seconds=5),
+        max_working_time=2
+    )
+    job3 = Job(target=create_tmp_dir)
+    job4 = Job(target=create_file, dependencies=[job3])
+    job5 = Job(target=delete_tmp_dir, dependencies=[job3, job4])
+    job6 = Job(target=job_with_error, tries=4)
 
-job1 = Job(
-    target=long_time_job, start_at=datetime.now() + timedelta(seconds=5),
-    max_working_time=2
-)
-job2 = Job(target=create_tmp_dir)
-job3 = Job(target=create_file, dependencies=[job2])
-job4 = Job(target=delete_tmp_dir, dependencies=[job2, job3])
-job5 = Job(target=job_with_error, tries=4)
+    scheduler.add_task(job1)
+    scheduler.add_task(job5)
+    scheduler.add_task(job4)
+    scheduler.add_task(job2)
+    scheduler.add_task(job3)
+    scheduler.add_task(job6)
+    scheduler.run()
 
-scheduler.add_task(job4)
-scheduler.add_task(job3)
-scheduler.add_task(job1)
 
-scheduler.add_task(job2)
-scheduler.add_task(job5)
-scheduler.run()
+if __name__ == "__main__":
+    start_scheduler()
